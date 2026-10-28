@@ -51,7 +51,7 @@ cd ../ALFRED-Apps
 npm test
 ```
 
-Native tests require macOS, Xcode/Swift, and Node.js 24. Backend tests use disposable databases. Automated tests do not establish microphone quality. A GitHub workflow is provided; its first hosted run has not been verified.
+Native tests require macOS, Xcode/Swift, and Node.js 24. Backend tests use disposable databases. Automated tests do not establish microphone quality. The first hosted GitHub workflow passed backend/native tests and an unsigned iOS build: https://github.com/musti10/ALFRED/actions/runs/40607211460.
 
 ## Layout
 
@@ -61,6 +61,10 @@ Native tests require macOS, Xcode/Swift, and Node.js 24. Backend tests use dispo
 | `Projektdateien/ALFRED-Apps` | Electron, HTTPS gateway, and SwiftUI |
 | `Sprachlabor` | Pipecat prototype and optional shared runtime |
 | `Stimmen/Thorsten` | Voice download script and license notices |
+
+## Vision
+
+Build a JARVIS-inspired assistant named ALFRED: natural conversation, practical tools, contextual help, and clear user control. See [VISION.md](VISION.md). This describes our direction, not capabilities already delivered.
 
 ## Contributing and licensing
 
