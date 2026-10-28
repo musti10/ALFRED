@@ -4,6 +4,24 @@ import AVFoundation
 struct VoiceReady:Decodable {let ready:Bool;let message:String?}
 struct Transcript:Decodable {let text:String}
 
+// Mirrors the browser detector; continuous onset prevents scattered noise spikes
+// from accumulating into a voice turn. This remains energy-based, not semantic VAD.
+struct SpeechTurnDetector {
+ enum Decision {case waiting, complete, noSpeech}
+ private(set) var elapsed=0.0
+ private var onset=0.0
+ private var quiet=0.0
+ private var heard=false
+ mutating func update(level:Double,dt:Double)->Decision {
+  elapsed+=dt
+  if level > -38 {onset+=min(dt,0.15);quiet=0;if onset+1e-9>=0.3{heard=true}}
+  else{onset=0;quiet+=dt}
+  if !heard && elapsed>=20-1e-9{return .noSpeech}
+  if heard && (quiet>=2-1e-9 || elapsed>=45-1e-9){return .complete}
+  return .waiting
+ }
+}
+
 @MainActor final class VoiceDialog:NSObject,ObservableObject,AVAudioPlayerDelegate {
  @Published var active=false
  @Published var status="Bereit für Ihre Frage."
@@ -16,9 +34,8 @@ struct Transcript:Decodable {let text:String}
  private var meter:Timer?
  private var work:Task<Void,Never>?
  private var epoch=0
- private var began=Date()
- private var lastVoice=Date()
- private var voiced=0
+ private var measured=Date()
+ private var turn=SpeechTurnDetector()
  init(alfred:Alfred){self.alfred=alfred;super.init()}
  func stop(){epoch+=1;active=false;meter?.invalidate();meter=nil;recorder?.stop();recorder=nil;player?.stop();player=nil;work?.cancel();work=nil;removeRecording();try? AVAudioSession.sharedInstance().setActive(false,options:.notifyOthersOnDeactivation);status="Unterhaltung beendet. Mikrofon aus."}
  private func removeRecording(){if let url=recordingURL{try? FileManager.default.removeItem(at:url)};recordingURL=nil}
@@ -42,15 +59,18 @@ struct Transcript:Decodable {let text:String}
   let session=AVAudioSession.sharedInstance();try session.setCategory(.playAndRecord,mode:.voiceChat,options:[.defaultToSpeaker,.allowBluetoothHFP]);try session.setActive(true)
   let url=FileManager.default.temporaryDirectory.appendingPathComponent("alfred-voice-\(UUID().uuidString).caf");recordingURL=url
   let audio=try AVAudioRecorder(url:url,settings:[AVFormatIDKey:kAudioFormatLinearPCM,AVSampleRateKey:16000,AVNumberOfChannelsKey:1,AVLinearPCMBitDepthKey:16,AVLinearPCMIsFloatKey:false,AVLinearPCMIsBigEndianKey:false])
-  audio.isMeteringEnabled=true;guard audio.record() else{throw AppError.message("Mikrofon konnte nicht gestartet werden.")};recorder=audio;began=Date();lastVoice=began;voiced=0;status="Ich höre zu …"
+  audio.isMeteringEnabled=true;guard audio.record() else{throw AppError.message("Mikrofon konnte nicht gestartet werden.")};recorder=audio;measured=Date();turn=SpeechTurnDetector();status="Ich höre zu …"
   meter=Timer.scheduledTimer(withTimeInterval:0.1,repeats:true){[weak self] _ in Task{@MainActor in self?.measure(run)}}
  }
  private func measure(_ run:Int){
   guard active,epoch==run,let recorder else{return}
   recorder.updateMeters();let now=Date()
-  if recorder.averagePower(forChannel:0) > -38{voiced+=1;lastVoice=now}
-  if voiced>=3 && now.timeIntervalSince(lastVoice)>=1.4 || now.timeIntervalSince(began)>=45{finishRecording(run)}
-  else if voiced<3 && now.timeIntervalSince(began)>=20{stop();failure="Keine Sprache erkannt. Starten Sie das Gespräch erneut."}
+  let dt=max(0,now.timeIntervalSince(measured));measured=now
+  switch turn.update(level:Double(recorder.averagePower(forChannel:0)),dt:dt){
+  case .complete:finishRecording(run)
+  case .noSpeech:stop();failure="Keine Sprache erkannt. Starten Sie das Gespräch erneut."
+  case .waiting:break
+  }
  }
  // The Mac accepts canonical mono PCM16 WAV only. CAF metadata never crosses the network.
  private func wav(_ url:URL)throws->Data {
@@ -97,5 +117,5 @@ struct VoiceDialogView:View {
  @Environment(\.dismiss) private var dismiss
  @Environment(\.scenePhase) private var phase
  init(alfred:Alfred){_dialog=StateObject(wrappedValue:VoiceDialog(alfred:alfred))}
- var body:some View{ZStack{Color.black.ignoresSafeArea();VStack(spacing:28){HStack{Text("ALFRED").font(.headline).tracking(4);Spacer();Button{dialog.stop();dismiss()}label:{Image(systemName:"xmark").font(.title2).frame(width:48,height:48)}.accessibilityLabel("Unterhaltung beenden")};Spacer();Image(systemName:"waveform").font(.system(size:76,weight:.light)).foregroundStyle(dialog.active ? .white:.gray);Text(dialog.status).foregroundStyle(.secondary).multilineTextAlignment(.center);if let failure=dialog.failure{Text(failure).foregroundStyle(.white).multilineTextAlignment(.center);Button("Erneut starten"){dialog.start()}.buttonStyle(.bordered)};if !dialog.active && dialog.failure==nil{Button("Unterhaltung fortsetzen"){dialog.start()}.buttonStyle(.bordered)};if !dialog.heard.isEmpty{Text(dialog.heard).font(.callout).foregroundStyle(.secondary).lineLimit(4)};Spacer();Text("Verarbeitung auf Ihrem Mac · Im Gespräch wird erkannter Text direkt gesendet.").font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.center)}.padding(28)}.task{dialog.start()}.onReceive(NotificationCenter.default.publisher(for:AVAudioSession.interruptionNotification)){_ in dialog.stop()}.onDisappear{dialog.stop()}.onChange(of:phase){_,value in if value != .active{dialog.stop()}}}
+ var body:some View{ZStack{Color.black.ignoresSafeArea();VStack(spacing:28){HStack{Text("ALFRED").font(.headline).tracking(4);Spacer();Button{dialog.stop();dismiss()}label:{Image(systemName:"xmark").font(.title2).frame(width:48,height:48)}.accessibilityLabel("Unterhaltung beenden")};Spacer();Image(systemName:"waveform").font(.system(size:76,weight:.light)).foregroundStyle(dialog.active ? .white:.gray);Text(dialog.status).foregroundStyle(.secondary).multilineTextAlignment(.center);if let failure=dialog.failure{Text(failure).foregroundStyle(.white).multilineTextAlignment(.center);Button("Erneut starten"){dialog.start()}.buttonStyle(.bordered)};if !dialog.active && dialog.failure==nil{Button("Unterhaltung fortsetzen"){dialog.start()}.buttonStyle(.bordered)};if !dialog.heard.isEmpty{Text(dialog.heard).font(.callout).foregroundStyle(.secondary).lineLimit(4)};Spacer();Text("Verarbeitung auf Ihrem Mac · Im Gespräch wird erkannter Text direkt gesendet.").font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.center)}.padding(28)}.task{dialog.start()}.onReceive(NotificationCenter.default.publisher(for:AVAudioSession.interruptionNotification)){_ in dialog.stop()}.onDisappear{dialog.stop()}.onChange(of:phase){_,value in if value == .background{dialog.stop()}}}
 }

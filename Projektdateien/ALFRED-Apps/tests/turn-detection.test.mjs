@@ -1,0 +1,6 @@
+import {test} from 'node:test';import assert from 'node:assert/strict';import {readFileSync,mkdtempSync,writeFileSync,rmSync} from 'node:fs';import {tmpdir} from 'node:os';import {join} from 'node:path';import {execFileSync} from 'node:child_process';
+test('Actual Swift detector passes the same timing/noise fixtures as the browser',()=>{
+ const code=readFileSync(new URL('../iphone/ALFRED/VoiceDialog.swift',import.meta.url),'utf8');const detector=code.slice(code.indexOf('struct SpeechTurnDetector'),code.indexOf('@MainActor final'));
+ const cases=JSON.parse(readFileSync(new URL('../../alfred-v0.3/tests/fixtures/turn-cases.json',import.meta.url),'utf8'));const dir=mkdtempSync(join(tmpdir(),'alfred-turn-swift-'));
+ try{const body=cases.map(c=>`do{var d=SpeechTurnDetector();var result=SpeechTurnDetector.Decision.waiting;var at=0;for frame in ${JSON.stringify(c.frames)} {at+=1;result=d.update(level:frame[0],dt:frame[1]);if String(describing:result) != "waiting"{break}};assert(String(describing:result)=="${c.decision}");assert(at==${c.at})}`).join('\n');const file=join(dir,'test.swift');writeFileSync(file,'import Foundation\n'+detector+body+'\nprint("passed")');assert.match(execFileSync('/usr/bin/swift',[file],{encoding:'utf8'}),/passed/);}finally{rmSync(dir,{recursive:true,force:true});}
+});

@@ -28,12 +28,12 @@ for(const directory of ['public','node_modules','models','integrations','third-p
 await cp(process.execPath,join(staging,'runtime','node'));await chmod(join(staging,'runtime','node'),0o755);
 await writeFile(join(staging,'installation.json'),JSON.stringify({projectRoot:dirname(parent)}));
 const output=await mkdtemp(join(tmpdir(),'alfred-native-build-'));
-const paths=await packager({dir:root,out:output,name:'ALFRED',platform:'darwin',arch:'arm64',overwrite:true,appBundleId:'de.local.alfred.mac',appVersion:'0.15.0',asar:false,ignore:[/^\/staging/,/^\/iphone/,/^\/tests/,/^\/README/,/^\/Mac-App/],icon:existsSync(join(root,'desktop','ALFRED.icns'))?join(root,'desktop','ALFRED.icns'):undefined,extendInfo:{NSMicrophoneUsageDescription:'ALFRED nimmt nur nach Klick auf Sprechen Audio für die lokale Spracherkennung auf.',NSLocalNetworkUsageDescription:'ALFRED kann nach Ihrer Freigabe eine verschlüsselte Verbindung mit Ihrer iPhone-App im selben WLAN herstellen.'}});
+const paths=await packager({dir:root,out:output,name:'ALFRED',platform:'darwin',arch:'arm64',overwrite:true,appBundleId:'de.local.alfred.mac',appVersion:'0.16.0',asar:false,ignore:[/^\/staging/,/^\/iphone/,/^\/tests/,/^\/README/,/^\/Mac-App/],icon:existsSync(join(root,'desktop','ALFRED.icns'))?join(root,'desktop','ALFRED.icns'):undefined,extendInfo:{NSMicrophoneUsageDescription:'ALFRED nimmt nur nach Klick auf Sprechen Audio für die lokale Spracherkennung auf.',NSLocalNetworkUsageDescription:'ALFRED kann nach Ihrer Freigabe eine verschlüsselte Verbindung mit Ihrer iPhone-App im selben WLAN herstellen.'}});
 const resources=join(paths[0],'ALFRED.app','Contents','Resources');
 for(const name of ['backend','runtime','installation.json'])await cp(join(staging,name),join(resources,name),{recursive:true,verbatimSymlinks:true});
 const app=join(paths[0],'ALFRED.app');
 execFileSync('/usr/bin/codesign',['--force','--deep','--options','runtime','--entitlements',join(root,'desktop','entitlements.plist'),'--sign','-',app]);
 execFileSync('/usr/bin/codesign',['--verify','--deep','--strict',app]);
-const archive=join(parent,'ALFRED-Mac-v0.15.0.zip');
+const archive=join(parent,'ALFRED-Mac-v0.16.0.zip');
 execFileSync('/usr/bin/ditto',['-c','-k','--sequesterRsrc','--keepParent',app,archive]);
 console.log('Mac-App erstellt: '+app+'\nZIP: '+archive);

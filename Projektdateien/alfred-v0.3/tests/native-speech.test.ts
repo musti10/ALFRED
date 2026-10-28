@@ -40,3 +40,17 @@ test('Satzweise Ausgabe startet mit dem ersten Satz; Stopp verwirft weitere Sät
  await reader.read('Erster Satz. Zweiter Satz. Dritter Satz.');assert.deepEqual(sent,['Erster Satz.']);audio[0].onended();
  await new Promise(r=>setTimeout(r,0));assert.deepEqual(sent,['Erster Satz.','Zweiter Satz.']);const ended=audio[1].onended;reader.stop();ended();assert.equal(sent.length,2);assert.equal(revoked.length,2);assert.equal(completed,0);await reader.read('Fertig.');audio.at(-1).onended();assert.equal(completed,1);
 });
+test('Active synthesis blocks transcription and chat; cancellation releases the shared busy state',async()=>{
+ const dataDir=mkdtempSync(join(tmpdir(),'alfred-inference-lock-'));let entered:()=>void=()=>{},transcriptions=0;const started=new Promise<void>(r=>entered=r);
+ const spoken={status:async()=>({ready:true}),answer:async()=> 'Bereit.',synthesize:async(_text:string,signal:AbortSignal)=>{entered();return await new Promise<Buffer>((_,reject)=>signal.addEventListener('abort',()=>reject(Error('cancelled')),{once:true}));}};
+ const app=createApp({dataDir,spoken,speech:{status:()=>({ready:true}),transcribe:async()=>{transcriptions++;return 'Test';}} as any});const base=await listen(app);
+ const req=(path:string,body:any)=>fetch(base+'/api'+path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+ try{const chat=await req('/chats',{}).then(r=>r.json());const controller=new AbortController();const audio=fetch(base+'/api/voice/synthesize',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:'Test',confirmed:true}),signal:controller.signal}).catch(()=>null);await started;
+ assert.equal((await fetch(base+'/api/state').then(r=>r.json())).busy,true);
+ assert.equal((await fetch(base+'/api/voice/transcribe',{method:'POST',headers:{'Content-Type':'audio/wav'},body:'not launched'})).status,409);
+ assert.equal((await req('/chats/'+chat.id+'/messages',{content:'Test',engine:'pipecat'})).status,409);assert.equal(transcriptions,0);
+ controller.abort();await audio;for(let i=0;i<100;i++){if(!(await fetch(base+'/api/state').then(r=>r.json())).busy)break;await new Promise(r=>setTimeout(r,5));}
+ assert.equal((await fetch(base+'/api/state').then(r=>r.json())).busy,false);
+ assert.equal((await req('/chats/'+chat.id+'/messages',{content:'Now available',engine:'pipecat'})).status,200);
+ }finally{await close(app);rmSync(dataDir,{recursive:true,force:true});}
+});

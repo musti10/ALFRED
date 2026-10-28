@@ -59,7 +59,7 @@ export function createApp({dataDir=join(root,'data'),ollama='http://127.0.0.1:11
  finally{res.off('close',disconnect);outputBusy=false;}
  }
  if(req.method==='POST' && path==='/api/voice/transcribe'){
- if(busy)return send(409,{error:'Bitte zuerst die laufende Antwort oder Aufnahme beenden.'});
+ if(busy||outputBusy)return send(409,{error:'Bitte zuerst die laufende Antwort oder Aufnahme beenden.'});
  if(req.headers['content-type']!=='audio/wav')return send(415,{error:'WAV-Aufnahme erforderlich.'});
  if(!speech.status().ready)return send(503,{error:'Lokale Spracheingabe noch nicht eingerichtet.'});
  busy=true;const controller=new AbortController();const signal=AbortSignal.any([controller.signal,AbortSignal.timeout(120000)]);
@@ -76,8 +76,8 @@ export function createApp({dataDir=join(root,'data'),ollama='http://127.0.0.1:11
  finally{res.off('close',disconnect);busy=false;}
  return;
  }
- if(req.method==='GET' && path==='/api/info')return send(200,{app:'alfred-local',version:'0.15.0'});
- if(req.method==='GET' && path==='/api/state')return send(200,{chats:db.prepare('SELECT * FROM chats ORDER BY rowid DESC').all(),memories:db.prepare('SELECT * FROM memories ORDER BY rowid').all(),busy});
+ if(req.method==='GET' && path==='/api/info')return send(200,{app:'alfred-local',version:'0.16.0'});
+ if(req.method==='GET' && path==='/api/state')return send(200,{chats:db.prepare('SELECT * FROM chats ORDER BY rowid DESC').all(),memories:db.prepare('SELECT * FROM memories ORDER BY rowid').all(),busy:busy||outputBusy});
  if(req.method==='GET' && path==='/api/status'){
  try{const r=await fetch(`${ollama}/api/tags`,{signal:AbortSignal.timeout(3000)});if(!r.ok)throw Error();const data=await r.json() as any;const found=data.models?.find((m:any)=>m.name===model||m.name===`${model}:latest`);return send(200,{ready:!!found && !found.remote_host,model,message:found?.remote_host?'Cloud-Modell wird nicht unterstützt.':found?'Ollama verbunden':'Modell alfred fehlt. Prüfe ollama list.'});}catch{return send(200,{ready:false,model,message:'Ollama nicht erreichbar. Öffne die Ollama-App.'});}
  }
@@ -99,12 +99,12 @@ export function createApp({dataDir=join(root,'data'),ollama='http://127.0.0.1:11
  const match=path.match(/^\/api\/chats\/([a-f0-9-]+)(\/messages)?$/);
  if(req.method==='GET'&&match){if(!db.prepare('SELECT id FROM chats WHERE id=?').get(match[1]))return send(404,{error:'Gespräch fehlt.'});return send(200,db.prepare('SELECT * FROM messages WHERE chat=? ORDER BY rowid').all(match[1]));}
  if(!['POST','PATCH','DELETE'].includes(req.method!))return send(404,{error:'Nicht gefunden.'});
- if(busy)return send(409,{error:'Bitte warte, bis die aktuelle Antwort abgeschlossen ist.'});
+ if(busy||outputBusy)return send(409,{error:'Bitte warte, bis die aktuelle Antwort abgeschlossen ist.'});
  if(!req.headers['content-type']?.startsWith('application/json'))return send(415,{error:'JSON erforderlich.'});
  const chunks:Buffer[]=[];let size=0;for await(const chunk of req){size+=chunk.length;if(size>(path==='/api/import'?5242880:32768))return send(413,{error:'Anfrage zu groß.'});chunks.push(chunk);}
  const raw=Buffer.concat(chunks).toString('utf8');
  let body:any;try{body=JSON.parse(raw||'{}');if(!body||typeof body!=='object'||Array.isArray(body))throw Error();}catch{return send(400,{error:'Ungültiges JSON.'});}
- if(busy)return send(409,{error:'Bitte warte, bis die aktuelle Antwort abgeschlossen ist.'});
+ if(busy||outputBusy)return send(409,{error:'Bitte warte, bis die aktuelle Antwort abgeschlossen ist.'});
  const validText=(value:unknown,max:number)=>typeof value==='string'&&value.trim().length>0&&value.length<=max;
  if(req.method==='POST'&&path==='/api/hermes/requests'){
  if(!validText(body.content,4000)||body.confirmed!==true||Object.keys(body).some(key=>!['content','confirmed','chatId'].includes(key)))return send(400,{error:'Bitte ausschließlich den geprüften Text bestätigen (1–4000 Zeichen).'});
