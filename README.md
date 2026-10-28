@@ -68,6 +68,6 @@ Build a JARVIS-inspired assistant named ALFRED: natural conversation, practical 
 
 ## Contributing and licensing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) and [ROADMAP.md](ROADMAP.md). Reproducible improvements to German conversation, recognition, response quality, and latency on 16 GB systems are especially welcome. Never post private chats, QR codes, or credentials.
+See [CONTRIBUTING.md](CONTRIBUTING.md), [ROADMAP.md](ROADMAP.md), and the [Copilot-assisted review](docs/COPILOT-REVIEW-2026-10-28.md). Reproducible improvements to German conversation, recognition, response quality, and latency on 16 GB systems are especially welcome. Never post private chats, QR codes, or credentials.
 
 Original ALFRED code is MIT-licensed; see [LICENSE](LICENSE). Other components retain their own terms; see [THIRD-PARTY.md](THIRD-PARTY.md). This is an independent project, not affiliated with film studios or fictional-character rights holders.

@@ -10,4 +10,4 @@ Please inspect ALFRED and suggest small, evidence-backed improvements:
 
 For each finding give the file, concrete impact, a small proposed change, and verification. Avoid broad framework replacements first.
 
-Prepared request; not yet submitted to Copilot.
+Submitted to GitHub Copilot Chat with the repository attached on 2026-10-28. A follow-up corrected initial inaccuracies. See docs/COPILOT-REVIEW-2026-10-28.md for checked conclusions.
