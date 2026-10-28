@@ -1,0 +1,6 @@
+class AlfredRecorder extends AudioWorkletProcessor {
+ constructor(options){super();this.auto=!!options?.processorOptions?.autoEnd;this.quiet=0;this.voiced=0;this.heard=false;this.chunks=[];this.size=0;this.stopped=false;this.port.onmessage=event=>{if(event.data==='stop')this.flush();};}
+ flush(){if(this.stopped)return;this.stopped=true;const data=new Float32Array(this.size);let offset=0;for(const chunk of this.chunks){data.set(chunk,offset);offset+=chunk.length;}this.chunks=[];this.port.postMessage(data,[data.buffer]);}
+ process(inputs){if(this.stopped)return false;const input=inputs[0]?.[0];if(input){this.chunks.push(input.slice());this.size+=input.length;if(this.auto){let power=0;for(const v of input)power+=v*v;const loud=Math.sqrt(power/input.length)>0.012;if(loud){this.voiced+=input.length;this.quiet=0;if(this.voiced>=sampleRate*0.25)this.heard=true;}else this.quiet+=input.length;if(this.heard&&this.quiet>=sampleRate*1.4){this.flush();return false;}if(!this.heard&&this.size>=sampleRate*20){this.stopped=true;this.chunks=[];this.port.postMessage({noSpeech:true});return false;}}if(this.size>=sampleRate*60){this.flush();return false;}}return true;}
+}
+registerProcessor('alfred-recorder',AlfredRecorder);

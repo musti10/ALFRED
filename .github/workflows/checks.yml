@@ -1,0 +1,21 @@
+name: Checks
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Backend tests
+        working-directory: Projektdateien/alfred-v0.3
+        run: npm test
+      - name: Native and gateway tests
+        working-directory: Projektdateien/ALFRED-Apps
+        run: npm test
+      - name: Unsigned iPhone build
+        working-directory: Projektdateien/ALFRED-Apps
+        run: xcodebuild -project iphone/ALFRED.xcodeproj -scheme ALFRED -configuration Debug -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath "$RUNNER_TEMP/alfred-ios" CODE_SIGNING_ALLOWED=NO build

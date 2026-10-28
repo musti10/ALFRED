@@ -1,0 +1,19 @@
+{
+  "name": "alfred-apps",
+  "version": "0.15.0",
+  "private": true,
+  "type": "module",
+  "main": "desktop/main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "build:mac": "node desktop/build.mjs",
+    "test": "node --test tests/*.test.mjs"
+  },
+  "dependencies": {
+    "qrcode": "1.5.4"
+  },
+  "devDependencies": {
+    "electron": "45.0.0",
+    "@electron/packager": "19.0.1"
+  }
+}
